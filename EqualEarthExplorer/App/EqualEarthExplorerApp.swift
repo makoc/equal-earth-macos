@@ -20,6 +20,11 @@ struct EqualEarthExplorerApp: App {
                 Button("Centre 0°, 0°") { state.resetToOrigin() }
                     .keyboardShortcut("0")
                 Divider()
+                Button("Satellite Base Map") { state.baseMap = .satellite }
+                    .keyboardShortcut("1")
+                Button("Political Base Map") { state.baseMap = .political }
+                    .keyboardShortcut("2")
+                Divider()
                 Button("Download Imagery…") { imagery.isSheetPresented = true }
                     .disabled(imagery.phase == .ready)
                 Button("Delete Cached Imagery") { imagery.deleteCache() }

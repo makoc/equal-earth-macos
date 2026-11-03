@@ -3,6 +3,7 @@ import SwiftUI
 /// Asks for consent before downloading the imagery, then shows the progress.
 struct DownloadSheet: View {
     let imagery: ImageryStore
+    let state: ViewState
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -10,7 +11,7 @@ struct DownloadSheet: View {
             Label("Download Earth Imagery", systemImage: "globe.europe.africa")
                 .font(.title2.bold())
 
-            Text("The map can show NASA's Blue Marble Next Generation image (topography and bathymetry, December 2004, 21 600 × 10 800 pixels). It is in the public domain and is downloaded once, then kept on this Mac. Without it, the map shows only the vector overlays.")
+            Text("The satellite base map uses NASA's Blue Marble Next Generation image (topography and bathymetry, July 2004, 21 600 × 10 800 pixels). It is in the public domain and is downloaded once, then kept on this Mac. The political base map needs no download.")
                 .fixedSize(horizontal: false, vertical: true)
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
@@ -78,6 +79,10 @@ struct DownloadSheet: View {
     private var buttons: some View {
         switch imagery.phase {
         case .missing:
+            Button("Use Political Map") {
+                state.baseMap = .political
+                dismiss()
+            }
             Button("Not Now") { dismiss() }
                 .keyboardShortcut(.cancelAction)
             Button("Download") { imagery.download() }

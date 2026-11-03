@@ -2,6 +2,23 @@ import Foundation
 import Observation
 import simd
 
+/// The picture underneath the vector overlays.
+enum BaseMap: String, CaseIterable, Identifiable {
+    /// NASA Blue Marble imagery (downloaded once, after consent).
+    case satellite
+    /// Countries in distinct colours, lakes and oceans, painted from Natural Earth data.
+    case political
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .satellite: "Satellite"
+        case .political: "Political"
+        }
+    }
+}
+
 struct GeoPoint: Equatable {
     var longitude: Double   // radians
     var latitude: Double    // radians
@@ -14,11 +31,15 @@ final class ViewState {
     /// Rotation from geographic coordinates into the map frame (see `Orientation`).
     private(set) var orientation: simd_quatd = Orientation.identity
 
+    var baseMap: BaseMap = .satellite
     var showGraticule = true
     var showCoastlines = true
     var showBorders = true
     var showTissot = false
     var showOutline = true
+    var showRivers = true
+    var showStates = true
+    var showLabels = true
 
     /// Geographic position under the mouse pointer, if it is over the map or the globe.
     var cursor: GeoPoint?

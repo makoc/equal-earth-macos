@@ -56,6 +56,17 @@ final class MetalContext {
     // Loaded from the bundled GeoJSON in the background.
     private(set) var coastlines: OverlayBuffer?
     private(set) var borders: OverlayBuffer?
+    private(set) var rivers: OverlayBuffer?
+    private(set) var states: OverlayBuffer?
+    /// Country, capital and city names, most important first.
+    private(set) var labels: [MapLabel] = []
+
+    // Political base map: painted on first use (about 1 s, 180 MB of GPU memory).
+    private(set) var politicalTexture: MTLTexture?
+    private(set) var isPreparingPoliticalMap = false
+    @ObservationIgnored private var politicalData: PoliticalData?
+    @ObservationIgnored private var wantsPoliticalMap = false
+    static let politicalTextureWidth = 8192
 
     private init() {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
@@ -113,12 +124,42 @@ final class MetalContext {
 
         Task {
             let lists = await Task.detached(priority: .userInitiated) { () -> [SegmentList] in
-                ["ne_50m_coastline", "ne_50m_admin_0_boundary_lines_land"].map { name in
+                ["ne_50m_coastline",
+                 "ne_50m_admin_0_boundary_lines_land",
+                 "ne_50m_rivers_lake_centerlines",
+                 "ne_50m_admin_1_states_provinces_lines"].map { name in
                     (try? GeoJSONLoader.load(resource: name)) ?? SegmentList(space: .geographic)
                 }
             }.value
             coastlines = makeBuffer(lists[0])
             borders = makeBuffer(lists[1])
+            rivers = makeBuffer(lists[2])
+            states = makeBuffer(lists[3])
+
+            let political = await Task.detached(priority: .userInitiated) { try? PoliticalData.load() }.value
+            politicalData = political
+            labels = political?.labels ?? []
+            startPoliticalMapIfNeeded()
+        }
+    }
+
+    /// Paints the political base map in the background the first time it is needed.
+    func requestPoliticalMap() {
+        wantsPoliticalMap = true
+        startPoliticalMapIfNeeded()
+    }
+
+    private func startPoliticalMapIfNeeded() {
+        guard wantsPoliticalMap, politicalTexture == nil, !isPreparingPoliticalMap, let data = politicalData else { return }
+        isPreparingPoliticalMap = true
+        let device = UncheckedBox(value: self.device)
+        let width = Self.politicalTextureWidth
+        Task {
+            let texture = await Task.detached(priority: .userInitiated) { () -> UncheckedBox<MTLTexture>? in
+                (try? PoliticalMapRenderer.texture(data, width: width, device: device.value)).map { UncheckedBox(value: $0) }
+            }.value
+            politicalTexture = texture?.value
+            isPreparingPoliticalMap = false
         }
     }
 
@@ -159,7 +200,9 @@ final class MetalContext {
             frameToView = g * r.inverse
         }
 
-        let texture = imagery.texture
+        let political = state.baseMap == .political
+        let texture = political ? politicalTexture : imagery.texture
+        let theme = political ? LineTheme.political : LineTheme.satellite
         var raster = RasterUniforms(
             viewToGeo: Orientation.matrix(geoToView.inverse),
             view: viewInfo,
@@ -167,7 +210,7 @@ final class MetalContext {
                            state.showTissot ? 1 : 0,
                            Float(Self.tissotRadius),
                            Float(Self.tissotStep)),
-            oceanColor: SIMD4(0.11, 0.23, 0.38, 1),
+            oceanColor: political ? SIMD4(SIMD3<Float>(PoliticalMapRenderer.ocean), 1) : SIMD4(0.11, 0.23, 0.38, 1),
             backgroundColor: Self.backgroundColor,
             tissotColor: SIMD4(1.0, 0.55, 0.15, 0.45))
         encoder.setRenderPipelineState(rasterPipeline)
@@ -194,14 +237,16 @@ final class MetalContext {
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: overlay.segmentCount)
         }
 
-        if state.showGraticule { line(graticule, SIMD4(1, 1, 1, 0.35), width: 1) }
-        if state.showBorders { line(borders, SIMD4(1, 0.86, 0.45, 0.75), width: 0.9) }
-        if state.showCoastlines { line(coastlines, SIMD4(0.97, 0.97, 0.92, 0.95), width: 1) }
+        if state.showGraticule { line(graticule, theme.graticule, width: 1) }
+        if state.showRivers { line(rivers, theme.rivers, width: 0.8) }
+        if state.showStates { line(states, theme.states, width: 0.7) }
+        if state.showBorders { line(borders, theme.borders, width: 0.9) }
+        if state.showCoastlines { line(coastlines, theme.coastlines, width: 1) }
         if state.showTissot { line(tissot, SIMD4(1, 0.55, 0.15, 1), width: 1.2) }
         if state.showOutline {
             switch mode {
             case .map:
-                line(outline, SIMD4(0.85, 0.85, 0.85, 1), width: 1.5)
+                line(outline, theme.outline, width: 1.5)
             case .globe:
                 line(frameLines, SIMD4(0.35, 0.85, 1, 0.9), width: 1.2, backAlpha: 0.3)
                 line(cutLine, SIMD4(1, 0.25, 0.25, 1), width: 2, backAlpha: 0.45)
@@ -217,4 +262,28 @@ final class MetalContext {
 
     /// Dark neutral background behind the map and the globe.
     static let backgroundColor = SIMD4<Float>(0.09, 0.09, 0.1, 1)
+}
+
+/// Line colours that read well on each base map.
+struct LineTheme {
+    var graticule: SIMD4<Float>
+    var coastlines: SIMD4<Float>
+    var borders: SIMD4<Float>
+    var states: SIMD4<Float>
+    var rivers: SIMD4<Float>
+    var outline: SIMD4<Float>
+
+    static let satellite = LineTheme(graticule: SIMD4(1, 1, 1, 0.35),
+                                     coastlines: SIMD4(0.97, 0.97, 0.92, 0.95),
+                                     borders: SIMD4(1, 0.86, 0.45, 0.75),
+                                     states: SIMD4(1, 1, 1, 0.4),
+                                     rivers: SIMD4(0.55, 0.78, 1, 0.75),
+                                     outline: SIMD4(0.85, 0.85, 0.85, 1))
+
+    static let political = LineTheme(graticule: SIMD4(0.2, 0.35, 0.55, 0.3),
+                                     coastlines: SIMD4(0.25, 0.42, 0.62, 0.9),
+                                     borders: SIMD4(0.35, 0.3, 0.3, 0.85),
+                                     states: SIMD4(0.45, 0.42, 0.42, 0.55),
+                                     rivers: SIMD4(0.36, 0.6, 0.85, 0.9),
+                                     outline: SIMD4(0.85, 0.85, 0.85, 1))
 }

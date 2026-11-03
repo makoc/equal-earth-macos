@@ -38,11 +38,21 @@ struct SidePanel: View {
                 }
                 .controlSize(.large)
 
+                Picker("Base map", selection: $state.baseMap) {
+                    ForEach(BaseMap.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+
                 GroupBox("Overlays") {
                     VStack(alignment: .leading, spacing: 6) {
                         Toggle("Graticule (15°)", isOn: $state.showGraticule)
                         Toggle("Coastlines", isOn: $state.showCoastlines)
                         Toggle("Country borders", isOn: $state.showBorders)
+                        Toggle("States and provinces", isOn: $state.showStates)
+                            .help("First-level subdivisions of large countries: United States, Canada, Brazil, Russia, China, India, Indonesia, South Africa, Australia")
+                        Toggle("Rivers", isOn: $state.showRivers)
+                        Toggle("Country and city names", isOn: $state.showLabels)
+                            .help("Countries, national capitals and cities with at least 5 million inhabitants")
                         Toggle("Tissot indicatrices", isOn: $state.showTissot)
                         Toggle("Outline, cut line and poles", isOn: $state.showOutline)
                     }
@@ -65,7 +75,7 @@ struct SidePanel: View {
 
                 imagerySection
 
-                Text("Equal Earth projection: Šavrič, Patterson, Jenny (2018). Imagery: NASA Earth Observatory, Blue Marble Next Generation. Vectors: Natural Earth. All public domain.")
+                Text("Equal Earth projection: Šavrič, Patterson, Jenny (2018). Imagery: NASA Earth Observatory, Blue Marble Next Generation. Vectors and political map: Natural Earth. All public domain.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -76,7 +86,7 @@ struct SidePanel: View {
     @ViewBuilder
     private var imagerySection: some View {
         switch imagery.phase {
-        case .ready:
+        case _ where state.baseMap != .satellite, .ready:
             EmptyView()
         case .missing, .failed:
             Button("Download Imagery…") { imagery.isSheetPresented = true }

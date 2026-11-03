@@ -21,9 +21,10 @@ final class ImageryStore {
         case failed(String)
     }
 
-    static let sourceURL = URL(string: "https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x21600x10800.jpg")!
+    /// July: the northern hemisphere has little seasonal snow, so the continents show their land cover.
+    static let sourceURL = URL(string: "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-topography-bathymetry/july/world.topo.bathy.200407.3x21600x10800.jpg")!
     static let sourcePage = URL(string: "https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/")!
-    static let expectedBytes: Int64 = 29_868_040
+    static let expectedBytes: Int64 = 27_201_049
     /// Longest texture edge. 8192 × 4096 RGBA with mipmaps needs about 180 MB of GPU memory.
     nonisolated static let textureWidth = 8192
 
@@ -57,6 +58,7 @@ final class ImageryStore {
     func start() {
         guard !didStart else { return }
         didStart = true
+        removeStaleImages()
         if isCached {
             loadCachedImage()
         } else {
@@ -90,6 +92,16 @@ final class ImageryStore {
     }
 
     // MARK: - Private
+
+    /// Deletes images from earlier versions of the app (for example the December image).
+    private func removeStaleImages() {
+        let fm = FileManager.default
+        let folder = cacheURL.deletingLastPathComponent()
+        guard let files = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
+        for file in files where file.lastPathComponent != cacheURL.lastPathComponent {
+            try? fm.removeItem(at: file)
+        }
+    }
 
     private func updateProgress(received: Int64, total: Int64) {
         guard phase == .downloading else { return }

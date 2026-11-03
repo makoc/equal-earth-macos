@@ -71,9 +71,15 @@ final class EarthMTKView: MTKView {
             _ = state.showBorders
             _ = state.showTissot
             _ = state.showOutline
+            _ = state.showRivers
+            _ = state.showStates
+            _ = state.baseMap
             _ = imagery.texture
             _ = metal.coastlines
             _ = metal.borders
+            _ = metal.rivers
+            _ = metal.states
+            _ = metal.politicalTexture
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.needsDisplay = true
