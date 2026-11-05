@@ -1,7 +1,5 @@
 import Foundation
-import ImageIO
 import Metal
-import MetalKit
 import Observation
 
 /// Wraps a value that is handed between isolation domains exactly once.
@@ -182,25 +180,7 @@ final class ImageryStore {
     }
 
     nonisolated private static func makeTexture(from url: URL, device: MTLDevice) throws -> MTLTexture {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            throw DownloadError.undecodable
-        }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: textureWidth,
-            kCGImageSourceCreateThumbnailWithTransform: false,
-            kCGImageSourceShouldCacheImmediately: true,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            throw DownloadError.undecodable
-        }
-        let loader = MTKTextureLoader(device: device)
-        return try loader.newTexture(cgImage: image, options: [
-            .generateMipmaps: true,
-            .SRGB: false,
-            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
-            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue),
-        ])
+        try TextureFactory.texture(contentsOf: url, maxPixelSize: textureWidth, device: device)
     }
 }
 

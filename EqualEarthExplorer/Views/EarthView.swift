@@ -40,6 +40,8 @@ final class EarthMTKView: MTKView {
         self.imagery = imagery
         super.init(frame: .zero, device: MetalContext.shared.device)
         colorPixelFormat = .bgra8Unorm
+        // The textures hold sRGB values; let the system match them to the display (for example P3).
+        colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         framebufferOnly = true
         isPaused = true
         enableSetNeedsDisplay = true

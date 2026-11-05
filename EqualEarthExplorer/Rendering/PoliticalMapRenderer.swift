@@ -1,6 +1,5 @@
 import CoreGraphics
 import Metal
-import MetalKit
 
 /// Paints the political base map (ocean, country fills, lakes) into an equirectangular
 /// image with Core Graphics. The result is sampled by the same shader as the satellite
@@ -76,11 +75,6 @@ enum PoliticalMapRenderer {
 
     static func texture(_ data: PoliticalData, width: Int, device: MTLDevice) throws -> MTLTexture {
         guard let image = image(data, width: width) else { throw DownloadError.undecodable }
-        return try MTKTextureLoader(device: device).newTexture(cgImage: image, options: [
-            .generateMipmaps: true,
-            .SRGB: false,
-            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
-            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue),
-        ])
+        return try TextureFactory.texture(from: image, device: device)
     }
 }
